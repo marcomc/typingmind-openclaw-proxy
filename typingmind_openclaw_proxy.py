@@ -121,6 +121,9 @@ def _stream_completion_with_text(handler: BaseHTTPRequestHandler, model: str, te
 
 
 def _local_keyword_command_completion(payload: dict, model: str) -> dict | None:
+    if not ESCALATION_KEYWORDS_ENABLED:
+        return None
+
     messages = payload.get("messages")
     if not isinstance(messages, list) or not messages:
         return None

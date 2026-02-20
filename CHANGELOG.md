@@ -10,6 +10,8 @@
 - Updated keyword smoke tests and README keyword mapping docs to match the new routing.
 - Added `make list-keywords` to print supported escalation keyword aliases and their mapped upstream models without running network smoke requests.
 - Added chat-level keyword help interception: `!keywords` (and aliases `!keyword`, `!switches`, `!models`) now returns the live keyword map directly from the proxy without upstream forwarding.
+- Fixed keyword-help interception to honor `OPENCLAW_PROXY_ESCALATION_KEYWORDS_ENABLED=0` so disable mode is a true upstream pass-through.
+- Removed tracked Python bytecode artifact from `__pycache__/` and added repository ignore rules for Python cache files.
 
 ### Implemented Features
 
