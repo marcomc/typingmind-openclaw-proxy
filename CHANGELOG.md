@@ -6,6 +6,10 @@
 
 - Standardized backlog workflow: completed TODO items are logged in `Unreleased` and removed from `TODO.md` unless they must remain as completed child tasks under a still-open parent.
 - Moved completed TODO item `Add automated make smoke-keywords coverage for all escalation keyword aliases.` out of `TODO.md` and tracked completion here.
+- Simplified proxy escalation keywords by removing `!spark` compatibility and keeping `!fast` mapped to `openai-codex/gpt-5.1`.
+- Updated keyword smoke tests and README keyword mapping docs to match the new routing.
+- Added `make list-keywords` to print supported escalation keyword aliases and their mapped upstream models without running network smoke requests.
+- Added chat-level keyword help interception: `!keywords` (and aliases `!keyword`, `!switches`, `!models`) now returns the live keyword map directly from the proxy without upstream forwarding.
 
 ### Implemented Features
 

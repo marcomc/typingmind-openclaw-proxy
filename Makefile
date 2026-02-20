@@ -21,7 +21,7 @@ TUNNEL_PLIST := $(HOME)/Library/LaunchAgents/$(TUNNEL_LABEL).plist
 TUNNEL_SCRIPT_TEMPLATE := $(TEMPLATE_DIR)/start_typingmind_cloudflared_token.sh.tpl
 TUNNEL_PLIST_TEMPLATE := $(TEMPLATE_DIR)/ai.openclaw.typingmind-proxy-tunnel-token.plist.tpl
 
-.PHONY: help install uninstall start stop restart status logs health smoke smoke-keywords launchctl-diagnostics print-static-api-key rotate-static-api-key enable-static-api-key-guard disable-static-api-key-guard lint \
+.PHONY: help install uninstall start stop restart status logs health smoke smoke-keywords list-keywords launchctl-diagnostics print-static-api-key rotate-static-api-key enable-static-api-key-guard disable-static-api-key-guard lint \
 	install-cloudflare-tunnel uninstall-cloudflare-tunnel \
 	start-cloudflare-tunnel stop-cloudflare-tunnel restart-cloudflare-tunnel \
 	status-cloudflare-tunnel logs-cloudflare-tunnel \
@@ -42,6 +42,7 @@ help:
 	'  make health' \
 	'  make smoke [BASE_URL=...] [SMOKE_MODEL=...]' \
 	'  make smoke-keywords [BASE_URL=...] [SMOKE_MODEL=...]' \
+	'  make list-keywords' \
 	'  make launchctl-diagnostics' \
 	'' \
 	'Auth/key helpers:' \
@@ -189,8 +190,7 @@ smoke-keywords:
 		fi; \
 		echo "Keyword !$$kw -> $$actual"; \
 	}; \
-	check_keyword fast openai-codex/gpt-5.3-codex-spark; \
-	check_keyword spark openai-codex/gpt-5.3-codex-spark; \
+	check_keyword fast openai-codex/gpt-5.1; \
 	check_keyword std openai-codex/gpt-5.1; \
 	check_keyword gp openai-codex/gpt-5.1; \
 	check_keyword mini openai-codex/gpt-5.1-codex-mini; \
@@ -203,6 +203,22 @@ smoke-keywords:
 	check_keyword 52c openai-codex/gpt-5.2-codex; \
 	check_keyword 53 openai-codex/gpt-5.3-codex; \
 	echo "Keyword smoke tests passed"
+
+list-keywords:
+	@printf '%s\n' \
+	'Available escalation keywords:' \
+	'  !fast -> openai-codex/gpt-5.1' \
+	'  !std -> openai-codex/gpt-5.1' \
+	'  !gp -> openai-codex/gpt-5.1' \
+	'  !mini -> openai-codex/gpt-5.1-codex-mini' \
+	'  !deep -> openai-codex/gpt-5.1-codex-max' \
+	'  !max -> openai-codex/gpt-5.1-codex-max' \
+	'  !codex -> openai-codex/gpt-5.3-codex' \
+	'  !heavy -> openai-codex/gpt-5.3-codex' \
+	'  !51 -> openai-codex/gpt-5.1' \
+	'  !52 -> openai-codex/gpt-5.2' \
+	'  !52c -> openai-codex/gpt-5.2-codex' \
+	'  !53 -> openai-codex/gpt-5.3-codex'
 
 launchctl-diagnostics:
 	@echo "==> launchctl print gui/$$(id -u)/$(LABEL) <=="

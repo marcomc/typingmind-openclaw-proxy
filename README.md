@@ -136,6 +136,8 @@ make status         # show launchctl status and listening port
 make logs           # tail proxy log file
 make health         # GET /health on local proxy
 make smoke          # run /v1, /v1/models, /v1/chat/completions smoke checks
+make smoke-keywords # validate keyword alias routing to expected upstream models
+make list-keywords  # print supported escalation keywords and mapped models
 make launchctl-diagnostics  # print LaunchAgent diagnostics for proxy + tunnel
 make print-static-api-key   # print proxy static API key for TypingMind bearer value
 make rotate-static-api-key  # rotate proxy static API key and restart proxy LaunchAgent
@@ -358,11 +360,15 @@ Important:
 
 If `OPENCLAW_PROXY_ESCALATION_KEYWORDS_ENABLED=1` (default), you can prefix a user message with a keyword to override the model for that request:
 
-- `!fast` / `!spark` -> `openai-codex/gpt-5.3-codex-spark` (fastest/lowest drain)
+- `!fast` -> `openai-codex/gpt-5.1` (fast default on ChatGPT-account Codex auth)
 - `!mini` -> `openai-codex/gpt-5.1-codex-mini`
 - `!std` / `!gp` -> `openai-codex/gpt-5.1`
 - `!deep` / `!max` -> `openai-codex/gpt-5.1-codex-max`
 - `!codex` / `!heavy` -> `openai-codex/gpt-5.3-codex`
+
+Built-in helper command (intercepted by proxy, not forwarded upstream):
+
+- `!keywords` (also `!keyword`, `!switches`, `!models`) -> returns the current keyword-to-model map directly in chat.
 
 Example:
 

@@ -22,9 +22,8 @@ UPSTREAM_TIMEOUT_SECONDS = int(os.environ.get("OPENCLAW_PROXY_UPSTREAM_TIMEOUT_S
 ESCALATION_KEYWORDS_ENABLED = os.environ.get("OPENCLAW_PROXY_ESCALATION_KEYWORDS_ENABLED", "1") != "0"
 
 KEYWORD_TO_MODEL = {
-    # Fast default: smallest/fastest in the ChatGPT Plus OAuth catalog.
-    "fast": "openai-codex/gpt-5.3-codex-spark",
-    "spark": "openai-codex/gpt-5.3-codex-spark",
+    # Fast default for ChatGPT-account Codex auth.
+    "fast": "openai-codex/gpt-5.1",
     # General purpose.
     "std": "openai-codex/gpt-5.1",
     "gp": "openai-codex/gpt-5.1",
@@ -41,6 +40,103 @@ KEYWORD_TO_MODEL = {
     "52c": "openai-codex/gpt-5.2-codex",
     "53": "openai-codex/gpt-5.3-codex",
 }
+KEYWORD_HELP_ALIASES = {"keywords", "keyword", "switches", "models"}
+
+
+def _find_last_user_message(messages: list) -> tuple[int | None, dict | None]:
+    for i in range(len(messages) - 1, -1, -1):
+        msg = messages[i]
+        if isinstance(msg, dict) and msg.get("role") == "user":
+            return i, msg
+    return None, None
+
+
+def _extract_leading_keyword(text: str) -> tuple[str | None, str]:
+    stripped = text.lstrip()
+    if not stripped.startswith("!"):
+        return None, stripped
+    first, *rest = stripped.split(None, 1)
+    keyword = first[1:].strip().lower()
+    remainder = rest[0] if rest else ""
+    return keyword, remainder
+
+
+def _keyword_list_text() -> str:
+    lines = ["Available model-switch keywords:"]
+    for keyword, model in KEYWORD_TO_MODEL.items():
+        lines.append(f"- !{keyword} -> {model}")
+    lines.append("Usage example: !deep Explain the migration plan.")
+    return "\n".join(lines)
+
+
+def _completion_with_text(model: str, text: str) -> dict:
+    ts = int(time.time())
+    return {
+        "id": f"chatcmpl_proxy_{uuid.uuid4()}",
+        "object": "chat.completion",
+        "created": ts,
+        "model": model,
+        "choices": [
+            {
+                "index": 0,
+                "message": {"role": "assistant", "content": text},
+                "finish_reason": "stop",
+            }
+        ],
+        "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+    }
+
+
+def _stream_completion_with_text(handler: BaseHTTPRequestHandler, model: str, text: str) -> None:
+    ts = int(time.time())
+    completion_id = f"chatcmpl_proxy_{uuid.uuid4()}"
+    first = {
+        "id": completion_id,
+        "object": "chat.completion.chunk",
+        "created": ts,
+        "model": model,
+        "choices": [{"index": 0, "delta": {"role": "assistant", "content": text}, "finish_reason": None}],
+    }
+    second = {
+        "id": completion_id,
+        "object": "chat.completion.chunk",
+        "created": ts,
+        "model": model,
+        "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+    }
+
+    handler.send_response(200)
+    handler.send_header("Content-Type", "text/event-stream")
+    handler.send_header("Cache-Control", "no-cache")
+    handler.send_header("Connection", "close")
+    handler.send_header("Access-Control-Allow-Origin", "*")
+    handler.send_header("Access-Control-Allow-Headers", "authorization,content-type")
+    handler.send_header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+    handler.end_headers()
+    handler.wfile.write(f"data: {json.dumps(first)}\n\n".encode("utf-8"))
+    handler.wfile.write(f"data: {json.dumps(second)}\n\n".encode("utf-8"))
+    handler.wfile.write(b"data: [DONE]\n\n")
+    handler.wfile.flush()
+    handler.close_connection = True
+
+
+def _local_keyword_command_completion(payload: dict, model: str) -> dict | None:
+    messages = payload.get("messages")
+    if not isinstance(messages, list) or not messages:
+        return None
+
+    idx, user_message = _find_last_user_message(messages)
+    if idx is None or not isinstance(user_message, dict):
+        return None
+
+    content = user_message.get("content")
+    if not isinstance(content, str):
+        return None
+
+    keyword, _ = _extract_leading_keyword(content)
+    if keyword not in KEYWORD_HELP_ALIASES:
+        return None
+    return _completion_with_text(model, _keyword_list_text())
 
 
 def _apply_escalation_keyword(payload: dict) -> dict:
@@ -51,33 +147,25 @@ def _apply_escalation_keyword(payload: dict) -> dict:
     if not isinstance(messages, list) or not messages:
         return payload
 
-    # Prefer last user message.
-    idx = None
-    for i in range(len(messages) - 1, -1, -1):
-        if isinstance(messages[i], dict) and messages[i].get("role") == "user":
-            idx = i
-            break
+    idx, user_message = _find_last_user_message(messages)
     if idx is None:
         return payload
 
-    content = messages[idx].get("content")
+    content = user_message.get("content")
     if not isinstance(content, str):
         return payload
 
-    text = content.lstrip()
-    if not text.startswith("!"):
+    keyword, remainder = _extract_leading_keyword(content)
+    if not keyword:
         return payload
 
-    # Format: "!keyword rest of message"
-    first, *rest = text.split(None, 1)
-    keyword = first[1:].strip().lower()
     model = KEYWORD_TO_MODEL.get(keyword)
     if not model:
         return payload
 
     # Mutate in-place: override model and strip the keyword from the message.
     payload["model"] = model
-    messages[idx]["content"] = rest[0] if rest else ""
+    messages[idx]["content"] = remainder
     return payload
 
 
@@ -103,21 +191,7 @@ def _json_response(handler: BaseHTTPRequestHandler, status: int, payload: dict) 
 
 
 def _mock_completion(model: str) -> dict:
-    ts = int(time.time())
-    return {
-        "id": f"chatcmpl_proxy_{uuid.uuid4()}",
-        "object": "chat.completion",
-        "created": ts,
-        "model": model,
-        "choices": [
-            {
-                "index": 0,
-                "message": {"role": "assistant", "content": "OK"},
-                "finish_reason": "stop",
-            }
-        ],
-        "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
-    }
+    return _completion_with_text(model, "OK")
 
 
 class ProxyHandler(BaseHTTPRequestHandler):
@@ -195,9 +269,17 @@ class ProxyHandler(BaseHTTPRequestHandler):
         except Exception:
             payload = {}
 
-        payload = _apply_escalation_keyword(payload)
         model = payload.get("model") or DEFAULT_MODEL_ID
         wants_stream = bool(payload.get("stream"))
+        local_completion = _local_keyword_command_completion(payload, model)
+        if local_completion:
+            if wants_stream:
+                _stream_completion_with_text(self, model, local_completion["choices"][0]["message"]["content"])
+                return
+            return _json_response(self, 200, local_completion)
+
+        payload = _apply_escalation_keyword(payload)
+        model = payload.get("model") or DEFAULT_MODEL_ID
         messages = payload.get("messages")
         if not isinstance(messages, list) or not messages:
             # TypingMind "Test" can send tiny/invalid payloads; return a success envelope
