@@ -21,7 +21,7 @@ TUNNEL_PLIST := $(HOME)/Library/LaunchAgents/$(TUNNEL_LABEL).plist
 TUNNEL_SCRIPT_TEMPLATE := $(TEMPLATE_DIR)/start_typingmind_cloudflared_token.sh.tpl
 TUNNEL_PLIST_TEMPLATE := $(TEMPLATE_DIR)/ai.openclaw.typingmind-proxy-tunnel-token.plist.tpl
 
-.PHONY: help install uninstall start stop restart status logs health smoke launchctl-diagnostics print-static-api-key rotate-static-api-key enable-static-api-key-guard disable-static-api-key-guard lint \
+.PHONY: help install uninstall start stop restart status logs health smoke smoke-keywords launchctl-diagnostics print-static-api-key rotate-static-api-key enable-static-api-key-guard disable-static-api-key-guard lint \
 	install-cloudflare-tunnel uninstall-cloudflare-tunnel \
 	start-cloudflare-tunnel stop-cloudflare-tunnel restart-cloudflare-tunnel \
 	status-cloudflare-tunnel logs-cloudflare-tunnel \
@@ -41,6 +41,7 @@ help:
 	'  make logs' \
 	'  make health' \
 	'  make smoke [BASE_URL=...] [SMOKE_MODEL=...]' \
+	'  make smoke-keywords [BASE_URL=...] [SMOKE_MODEL=...]' \
 	'  make launchctl-diagnostics' \
 	'' \
 	'Auth/key helpers:' \
@@ -158,6 +159,50 @@ smoke:
 			| jq -e '.object == "chat.completion" and (.choices | type == "array") and (.choices | length >= 1)' >/dev/null; \
 	fi; \
 	echo "Smoke test passed"
+
+smoke-keywords:
+	@set -euo pipefail; \
+	API_KEY=""; \
+	if [ -f "$(STATIC_KEY_FILE)" ]; then \
+		API_KEY="$$(tr -d '\r\n' < "$(STATIC_KEY_FILE)")"; \
+	fi; \
+	call_api() { \
+		kw="$$1"; \
+		if [ -n "$$API_KEY" ]; then \
+			curl -fsS -X POST "$(BASE_URL)/v1/chat/completions" \
+				-H "Authorization: Bearer $$API_KEY" \
+				-H "Content-Type: application/json" \
+				-d "{\"model\":\"$(SMOKE_MODEL)\",\"messages\":[{\"role\":\"user\",\"content\":\"!$${kw} Reply OK\"}],\"stream\":false}"; \
+		else \
+			curl -fsS -X POST "$(BASE_URL)/v1/chat/completions" \
+				-H "Content-Type: application/json" \
+				-d "{\"model\":\"$(SMOKE_MODEL)\",\"messages\":[{\"role\":\"user\",\"content\":\"!$${kw} Reply OK\"}],\"stream\":false}"; \
+		fi; \
+	}; \
+	check_keyword() { \
+		kw="$$1"; \
+		expected="$$2"; \
+		actual="$$(call_api "$$kw" | jq -r '.model')"; \
+		if [ "$$actual" != "$$expected" ]; then \
+			echo "Keyword !$$kw failed: expected $$expected got $$actual"; \
+			exit 1; \
+		fi; \
+		echo "Keyword !$$kw -> $$actual"; \
+	}; \
+	check_keyword fast openai-codex/gpt-5.3-codex-spark; \
+	check_keyword spark openai-codex/gpt-5.3-codex-spark; \
+	check_keyword std openai-codex/gpt-5.1; \
+	check_keyword gp openai-codex/gpt-5.1; \
+	check_keyword mini openai-codex/gpt-5.1-codex-mini; \
+	check_keyword deep openai-codex/gpt-5.1-codex-max; \
+	check_keyword max openai-codex/gpt-5.1-codex-max; \
+	check_keyword codex openai-codex/gpt-5.3-codex; \
+	check_keyword heavy openai-codex/gpt-5.3-codex; \
+	check_keyword 51 openai-codex/gpt-5.1; \
+	check_keyword 52 openai-codex/gpt-5.2; \
+	check_keyword 52c openai-codex/gpt-5.2-codex; \
+	check_keyword 53 openai-codex/gpt-5.3-codex; \
+	echo "Keyword smoke tests passed"
 
 launchctl-diagnostics:
 	@echo "==> launchctl print gui/$$(id -u)/$(LABEL) <=="

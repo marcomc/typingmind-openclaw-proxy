@@ -22,6 +22,8 @@ Maintain `typingmind-openclaw-proxy` as a minimal, public-safe compatibility lay
 3. Update docs:
    - `CHANGELOG.md`
    - `TODO.md`
+   - Completed TODO items must be moved to the latest `CHANGELOG.md` `Unreleased` section and removed from `TODO.md`.
+   - Exception: completed child tasks may remain in `TODO.md` only when sibling child tasks under the same parent are still open; in that case completion must still be recorded in `Unreleased`.
 4. Run markdown lint for all changed markdown files:
    - `markdownlint --fix *.md`
    - `markdownlint *.md`

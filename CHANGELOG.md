@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Standardized backlog workflow: completed TODO items are logged in `Unreleased` and removed from `TODO.md` unless they must remain as completed child tasks under a still-open parent.
+- Moved completed TODO item `Add automated make smoke-keywords coverage for all escalation keyword aliases.` out of `TODO.md` and tracked completion here.
+
+### Implemented Features
+
+- Added `make smoke-keywords` to validate all supported escalation keyword aliases against expected upstream model IDs.
+- Added `smoke-keywords` to `make help` output for discoverability.
+
 ## [0.1.0] - 2026-02-20
 
 ### Implemented Features

@@ -354,6 +354,22 @@ Important:
 - Local HTTP endpoint is for local diagnostics only (for example `curl` tests).
 - `Support Image Input` in TypingMind works only when OpenClaw is backed by an API provider path that actually supports vision/image payloads. In this project's current ChatGPT Plus OAuth path, image payloads are accepted but not processed as real vision input.
 
+## Escalation keywords (optional)
+
+If `OPENCLAW_PROXY_ESCALATION_KEYWORDS_ENABLED=1` (default), you can prefix a user message with a keyword to override the model for that request:
+
+- `!fast` / `!spark` -> `openai-codex/gpt-5.3-codex-spark` (fastest/lowest drain)
+- `!mini` -> `openai-codex/gpt-5.1-codex-mini`
+- `!std` / `!gp` -> `openai-codex/gpt-5.1`
+- `!deep` / `!max` -> `openai-codex/gpt-5.1-codex-max`
+- `!codex` / `!heavy` -> `openai-codex/gpt-5.3-codex`
+
+Example:
+
+```text
+!deep Plan a safe rollback strategy for these changes.
+```
+
 ## Templates used by installer
 
 - `templates/start_typingmind_proxy.sh.tpl`

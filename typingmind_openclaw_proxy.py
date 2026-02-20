@@ -18,6 +18,67 @@ STATIC_API_KEY = os.environ.get("OPENCLAW_PROXY_STATIC_API_KEY", "").strip()
 LISTEN_HOST = os.environ.get("OPENCLAW_PROXY_HOST", "127.0.0.1")
 LISTEN_PORT = int(os.environ.get("OPENCLAW_PROXY_PORT", "18790"))
 DEFAULT_MODEL_ID = os.environ.get("OPENCLAW_PROXY_MODEL_ID", "openclaw:main")
+UPSTREAM_TIMEOUT_SECONDS = int(os.environ.get("OPENCLAW_PROXY_UPSTREAM_TIMEOUT_SECONDS", "600"))
+ESCALATION_KEYWORDS_ENABLED = os.environ.get("OPENCLAW_PROXY_ESCALATION_KEYWORDS_ENABLED", "1") != "0"
+
+KEYWORD_TO_MODEL = {
+    # Fast default: smallest/fastest in the ChatGPT Plus OAuth catalog.
+    "fast": "openai-codex/gpt-5.3-codex-spark",
+    "spark": "openai-codex/gpt-5.3-codex-spark",
+    # General purpose.
+    "std": "openai-codex/gpt-5.1",
+    "gp": "openai-codex/gpt-5.1",
+    # Lower-drain variant.
+    "mini": "openai-codex/gpt-5.1-codex-mini",
+    # Higher-rigor variants.
+    "deep": "openai-codex/gpt-5.1-codex-max",
+    "max": "openai-codex/gpt-5.1-codex-max",
+    "codex": "openai-codex/gpt-5.3-codex",
+    "heavy": "openai-codex/gpt-5.3-codex",
+    # Explicit versions.
+    "51": "openai-codex/gpt-5.1",
+    "52": "openai-codex/gpt-5.2",
+    "52c": "openai-codex/gpt-5.2-codex",
+    "53": "openai-codex/gpt-5.3-codex",
+}
+
+
+def _apply_escalation_keyword(payload: dict) -> dict:
+    if not ESCALATION_KEYWORDS_ENABLED:
+        return payload
+
+    messages = payload.get("messages")
+    if not isinstance(messages, list) or not messages:
+        return payload
+
+    # Prefer last user message.
+    idx = None
+    for i in range(len(messages) - 1, -1, -1):
+        if isinstance(messages[i], dict) and messages[i].get("role") == "user":
+            idx = i
+            break
+    if idx is None:
+        return payload
+
+    content = messages[idx].get("content")
+    if not isinstance(content, str):
+        return payload
+
+    text = content.lstrip()
+    if not text.startswith("!"):
+        return payload
+
+    # Format: "!keyword rest of message"
+    first, *rest = text.split(None, 1)
+    keyword = first[1:].strip().lower()
+    model = KEYWORD_TO_MODEL.get(keyword)
+    if not model:
+        return payload
+
+    # Mutate in-place: override model and strip the keyword from the message.
+    payload["model"] = model
+    messages[idx]["content"] = rest[0] if rest else ""
+    return payload
 
 
 def _bearer_token(auth_header: str) -> str:
@@ -134,6 +195,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
         except Exception:
             payload = {}
 
+        payload = _apply_escalation_keyword(payload)
         model = payload.get("model") or DEFAULT_MODEL_ID
         wants_stream = bool(payload.get("stream"))
         messages = payload.get("messages")
@@ -149,6 +211,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 {"error": {"message": "OPENCLAW_GATEWAY_TOKEN is not set", "type": "server_error"}},
             )
 
+        raw = json.dumps(payload).encode("utf-8")
         request = urllib.request.Request(
             url=f"{GATEWAY_URL}/v1/chat/completions",
             method="POST",
@@ -160,7 +223,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
         )
 
         try:
-            with urllib.request.urlopen(request, timeout=120) as response:
+            with urllib.request.urlopen(request, timeout=UPSTREAM_TIMEOUT_SECONDS) as response:
                 content_type = response.headers.get("Content-Type", "application/json")
                 is_sse = content_type.startswith("text/event-stream")
 
