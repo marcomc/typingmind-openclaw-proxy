@@ -349,6 +349,15 @@ Use this only after you have a working HTTPS endpoint from one of the tunnel opt
   - Persistent token tunnel: `https://<TUNNEL_HOSTNAME>/v1`
 - Model ID: `openclaw:main`
 
+Model catalog behavior:
+
+- `GET /v1/models` returns TypingMind-safe model IDs.
+- Known OpenClaw models are exposed with friendly IDs (for example `openclaw:gpt-5-1`).
+- Unknown upstream model IDs still fall back to `ocm:<upstream_id_with_/replaced_by__>` (for example `ocm:openai-codex__gpt-5.1`).
+- `POST /v1/chat/completions` accepts these aliased IDs and the proxy maps them back to canonical OpenClaw model IDs before forwarding upstream.
+- To disable aliasing and expose raw upstream IDs, set `OPENCLAW_PROXY_MODEL_ID_ALIASING_ENABLED=0`.
+- For routing diagnostics, keep `OPENCLAW_PROXY_DEBUG_MODEL_ROUTING=1` (default) to log requested/decoded/forwarded model IDs in proxy logs.
+
 Important:
 
 - Use HTTPS endpoint for TypingMind (all client variants).

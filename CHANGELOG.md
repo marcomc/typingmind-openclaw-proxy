@@ -4,6 +4,15 @@
 
 ### Changed
 
+- Added optional proxy-side generation guardrails that cap oversized `max_tokens` / `max_completion_tokens` requests with `OPENCLAW_PROXY_MAX_UPSTREAM_TOKENS` (default `0` = disabled).
+- Added TypingMind-safe model ID aliasing for `/v1/models` (default on), plus reverse alias resolution on `/v1/chat/completions`, including friendly IDs like `openclaw:gpt-5-1` for known OpenClaw models.
+- Added optional model-routing debug logs (`OPENCLAW_PROXY_DEBUG_MODEL_ROUTING`, default `1`) to print requested/decoded/forwarded model IDs for each chat request.
+- Normalized incoming request paths (including URL-encoded newline variants) before endpoint matching for better client compatibility.
+- Hardened streaming/non-stream response writes to tolerate client disconnects without broken-pipe error cascades and retry noise.
+- Added streaming compatibility fallback: when upstream sends `data: [DONE]` without a terminal `finish_reason: "stop"` chunk, proxy now injects a synthetic stop chunk before `[DONE]`.
+- Fixed SSE stream framing for synthetic stop injection by parsing complete SSE events before inspection/emission, preventing malformed interleaving that could trigger JSON parse errors in OpenCode clients.
+- Updated `GET /v1/models` discovery flow to use OpenClaw upstream `/v1/models` when available, then fallback to `openclaw models list --json`, then fallback to default local model metadata.
+- Added `make smoke-models-parity` to verify model ID parity between proxy `/v1/models` and `openclaw models list --json`.
 - Standardized backlog workflow: completed TODO items are logged in `Unreleased` and removed from `TODO.md` unless they must remain as completed child tasks under a still-open parent.
 - Moved completed TODO item `Add automated make smoke-keywords coverage for all escalation keyword aliases.` out of `TODO.md` and tracked completion here.
 - Simplified proxy escalation keywords by removing `!spark` compatibility and keeping `!fast` mapped to `openai-codex/gpt-5.1`.

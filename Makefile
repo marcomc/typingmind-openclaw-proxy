@@ -21,7 +21,7 @@ TUNNEL_PLIST := $(HOME)/Library/LaunchAgents/$(TUNNEL_LABEL).plist
 TUNNEL_SCRIPT_TEMPLATE := $(TEMPLATE_DIR)/start_typingmind_cloudflared_token.sh.tpl
 TUNNEL_PLIST_TEMPLATE := $(TEMPLATE_DIR)/ai.openclaw.typingmind-proxy-tunnel-token.plist.tpl
 
-.PHONY: help install uninstall start stop restart status logs health smoke smoke-keywords list-keywords launchctl-diagnostics print-static-api-key rotate-static-api-key enable-static-api-key-guard disable-static-api-key-guard lint \
+.PHONY: help install uninstall start stop restart status logs health smoke smoke-keywords smoke-models-parity list-keywords launchctl-diagnostics print-static-api-key rotate-static-api-key enable-static-api-key-guard disable-static-api-key-guard lint \
 	install-cloudflare-tunnel uninstall-cloudflare-tunnel \
 	start-cloudflare-tunnel stop-cloudflare-tunnel restart-cloudflare-tunnel \
 	status-cloudflare-tunnel logs-cloudflare-tunnel \
@@ -42,6 +42,7 @@ help:
 	'  make health' \
 	'  make smoke [BASE_URL=...] [SMOKE_MODEL=...]' \
 	'  make smoke-keywords [BASE_URL=...] [SMOKE_MODEL=...]' \
+	'  make smoke-models-parity [BASE_URL=...]' \
 	'  make list-keywords' \
 	'  make launchctl-diagnostics' \
 	'' \
@@ -203,6 +204,25 @@ smoke-keywords:
 	check_keyword 52c openai-codex/gpt-5.2-codex; \
 	check_keyword 53 openai-codex/gpt-5.3-codex; \
 	echo "Keyword smoke tests passed"
+
+smoke-models-parity:
+	@set -euo pipefail; \
+	proxy_file="$$(mktemp)"; \
+	upstream_file="$$(mktemp)"; \
+	trap 'rm -f "$$proxy_file" "$$upstream_file"' EXIT; \
+	curl -fsS "$(BASE_URL)/v1/models" | jq -S '.data | map(.id
+		| if .=="openclaw:gpt-5-1" then "openai-codex/gpt-5.1"
+		  elif .=="openclaw:gpt-5-1-codex-mini" then "openai-codex/gpt-5.1-codex-mini"
+		  elif .=="openclaw:gpt-5-1-codex-max" then "openai-codex/gpt-5.1-codex-max"
+		  elif .=="openclaw:gpt-5-2" then "openai-codex/gpt-5.2"
+		  elif .=="openclaw:gpt-5-2-codex" then "openai-codex/gpt-5.2-codex"
+		  elif .=="openclaw:gpt-5-3-codex" then "openai-codex/gpt-5.3-codex"
+		  elif .=="openclaw:gpt-5-3-codex-spark" then "openai-codex/gpt-5.3-codex-spark"
+		  elif startswith("ocm:") then ((ltrimstr("ocm:")) | gsub("__"; "/"))
+		  else . end) | sort' > "$$proxy_file"; \
+	openclaw models list --json | jq -S '.models | map(.key) | sort' > "$$upstream_file"; \
+	diff -u "$$upstream_file" "$$proxy_file" >/dev/null; \
+	echo "Models parity smoke test passed"
 
 list-keywords:
 	@printf '%s\n' \
